@@ -201,10 +201,14 @@ declare -a TESTS_WILDCARD=(
 
 declare -a TESTS_OTHER=(
 	'ls'
+	'ls | sjdkof'
 	'ls||pwd'
+	'ls | pwd'
 	'ls -kjasdf'
 	'ls|grep a'
 	'ls | pwd | jkdfs'
+	'jkdfs | sleep 1'
+	'sleep 1 | jkdfs'
 	''
 	'       '
 	'			'
@@ -235,9 +239,10 @@ reset_files()
 valgrind_flags=(valgrind --leak-check=full --track-fds=yes --trace-children=yes --show-leak-kinds=all --errors-for-leak-kinds=all --suppressions=../../readline.supp)
 
 
+
 valgrind_test()
 {
-	output=$(cd .test2 && "${valgrind_flags[@]}" ./minishell "$1" 2>&1)
+	output=$(cd .test2 && echo "$1" | "${valgrind_flags[@]}" ./minishell 2>&1)
 	if echo "$output" | grep -q "ERROR SUMMARY: 0 errors";then
 		echo -en "\e[32m[VOK] \e[0m"
 	else
@@ -246,18 +251,6 @@ valgrind_test()
 		echo -e "$output\n\n\n" >> logs/log_valgrind.txt
 	fi
 }
-
-# valgrind_test()
-# {
-# 	if (cd .test2 && "${valgrind_flags[@]}" ./minishell "$1") 2>&1 | grep -iEq "invalid read|invalid write|invalid free|definitely lost|indirectly lost|possibly lost|still reachable|use of uninitialised value|SIGSEGV" > /dev/null; then
-# 		echo -en "\e[31m[VKO] \e[0m"
-# 		echo -e "$1\n\n" >> logs/log_valgrind.txt
-# 		(cd .test2 && "${valgrind_flags[@]}" ./minishell "$1") 2>> logs/log_valgrind.txt
-# 		echo -e "\n\n\n" >> logs/log_valgrind.txt
-# 	else
-# 		echo -en "\e[32m[VOK] \e[0m"
-# 	fi
-# }
 
 normalize_output()
 {
@@ -271,7 +264,7 @@ normalize_output()
 launch_test()
 {
 	cd .test3 || exit
-	timeout 5s ./minishell "$1" 2>&1 | normalize_output > /dev/null
+	timeout 5s echo "$1" | ./minishell "$1" 2>&1 | normalize_output > /dev/null
 	ret_timeout=${PIPESTATUS[0]}
 	cd .. || exit
 	if [ "$ret_timeout" -eq 124 ]; then
@@ -279,26 +272,27 @@ launch_test()
 	    return 124 # Sort de la fonction, donc passe au test suivant si dans une boucle
 	fi
 	# if diff <(bash --posix -c "$1" 2>&1 | normalize_output) <(./minishell "$1" 2>&1 | normalize_output) > /dev/null; then
-	if diff <(cd .test1 && bash --posix -c "$1" 2>&1 | normalize_output "$1") <(cd .test2 && timeout 5s ./minishell "$1" 2>&1 | normalize_output "$1") > /dev/null; then
+	# if diff <(cd .test1 && bash --posix -c "$1" 2>&1 | normalize_output "$1") <(cd .test2 && timeout 5s ./minishell "$1" 2>&1 | normalize_output "$1") > /dev/null; then
+	if diff <(cd .test1 && echo "$1" | bash --posix 2>&1 | normalize_output "$1") <(cd .test2 && echo "$1" | ./minishell 2>&1 | normalize_output "$1") > /dev/null; then
 		echo -en "\e[32m[OK] \e[0m"
 	else
 		echo -en "\e[31m[KO] \e[0m"
 		reset_files
 		{
-			echo ===== TEST : "$1" =====;
+			echo "===== TEST : [$1] =====";
 			echo "";
 			echo "-----";
-			(cd .test2 && ./minishell "$1" 2>&1 | normalize_output "$1") 2>&1 | cat -e; 
+			(cd .test2 && echo "$1" | ./minishell 2>&1 | normalize_output "$1") 2>&1 | cat -e; 
 			echo "-----";
 			echo "";
 			echo "";
 		} >> logs/log_minishell.txt
 
 		{
-			echo ===== TEST : "$1" =====;
+			echo "===== TEST : [$1] =====";
 			echo "";
 			echo "-----";
-			(cd .test1 && bash --posix -c "$1" 2>&1 | normalize_output "$1") | cat -e;
+			(cd .test1 && echo "$1" | bash --posix 2>&1 | normalize_output "$1") | cat -e;
 			echo "-----";
 			echo "";
 			echo "";
@@ -309,10 +303,10 @@ launch_test()
 
 check_exit()
 {
-	(cd .test1 && bash --posix -c "$1") > /dev/null 2>&1
+	(cd .test1 && echo "$1" | bash --posix) > /dev/null 2>&1
 	BASH_STATUS=$?
 
-	(cd .test2 && ./minishell "$1"  > /dev/null 2>&1 ) > /dev/null 2>&1
+	(cd .test2 && echo "$1" | ./minishell > /dev/null 2>&1 ) > /dev/null 2>&1
 	MINISHELL_STATUS=$?
 
 
@@ -322,7 +316,7 @@ check_exit()
 		echo -en "\e[31m[EKO] \e[0m"
 		{
 			echo 'Command :';
-			echo "$1";
+			echo "[ $1 ]";
 			echo "Exit Status :";
 			echo "Bash : $BASH_STATUS";
 			echo "Minishell : $MINISHELL_STATUS";
@@ -352,8 +346,6 @@ do_other_tests()
 				sleep 0.15
 			fi
 			echo -e "$test"
-		# else
-		# 	echo -e "[Message de debug du tester] Ret vaut 124 ici donc theoriquement on a timeout."
 		fi
 		
 	done
@@ -439,11 +431,27 @@ do_norminette()
 	fi
 }
 
+test_make()
+{
+	MAKE_OUTPUT=$(make 2>&1)
+    MAKE_STATUS=$?
+
+    if [[ $MAKE_STATUS -ne 0 ]] || echo "$MAKE_OUTPUT" | grep -qi "error"; then
+        echo "Makefile failed."
+        return 1
+    fi
+	return 0
+}
+
 setup_test_environment()
 {
 	rm -rf logs
 	cd .. || exit
-	make > /dev/null 2>&1 
+	# make > /dev/null 2>&1 
+	if ! test_make; then
+		echo "Aborting."
+		exit 1
+	fi
 	do_norminette
 	cp minishell my_tester/
 	cd my_tester/ || exit
@@ -461,8 +469,6 @@ setup_test_environment()
 	mv minishell .test1/
 	cp -rf .test1/* .test3/
 	cp -rf .test1/* .test2/
-	# cp .test2/minishell .test1/
-	# cp .test2/minishell .test3/
 	mkdir save
 	cp -rf .test1/* save/
 }
@@ -495,3 +501,5 @@ do_the_tests()
 }
 
 do_the_tests "$1" "$2" "$3"
+
+echo -e "\nI can't test signals, here_doc or unexpected leave myself, please don't consider my tester as the absolute truth of minishell.\n"
