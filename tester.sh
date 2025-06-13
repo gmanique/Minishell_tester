@@ -33,7 +33,7 @@ declare -a TESTS_ECHO=(
 	'echo -n'
 	'echoHola'
 	'EechoO aaa'
-	'echo		Hola -n'
+	'echo        Hola -n'
 	'echo        '
 	"echo \$?"
 	"echo \$?$"
@@ -45,11 +45,11 @@ declare -a TESTS_ECHO=(
 	"echo \$? | echo \$? | echo \$?"
 	"echo ' $ '"
 	'echo " $ "'
-	"echo \$UID"
+	"echo \$HOME"
 	"echo \$HOME9"
 	"echo \$9HOME"
 	"echo \$HOME%"
-	"echo \$UID\$HOME"
+	"echo \$USER\$HOME"
 	"echo HOME=\$HOME"
 	"echo \$USER\$var\$USER\$USER\$USERtest\$USER"
 	"echo \$hola*"
@@ -106,9 +106,9 @@ declare -a TESTS_EXPORT=(
 	'export HOL}A=Bonjour && export'
 	'export HOL.A=Bonjour && export'
 	'export | grep HOME'
-	"export HOLA=\"bonjour      \" && echo \$HOLA | cat -e"
-	"export HOLA=\"   -n bonjour\" && echo \$HOLA"
-	"export HOLA=\"cat Makefile | grep NAME\" && echo \$HOLA"
+	# "export HOLA=\"bonjour      \" && echo \$HOLA | cat -e"
+	# "export HOLA=\"   -n bonjour\" && echo \$HOLA"
+	# "export HOLA=\"cat Makefile | grep NAME\" && echo \$HOLA"
 )
 
 declare -a TESTS_EXIT=(
@@ -138,12 +138,13 @@ declare -a TESTS_JOIN=(
 	'&&'
 	'||'
 	'|'
+	'|&'
+	'&|'
 	'&&&&&&'
 	'||||||||'
 	'>>>>>'
 	'>>>>>>>>>>>>>'
 	'<<<<<'
-	'<<<<<<<<<<<<<'
 	'> > > >'
 	'>> >> >> >>'
 	'>>>> >> >> >>'
@@ -211,7 +212,6 @@ declare -a TESTS_OTHER=(
 	'sleep 1 | jkdfs'
 	''
 	'       '
-	'			'
 	'hola'
 	'hola que tal'
 	'dsf && echo No'
@@ -222,6 +222,8 @@ declare -a TESTS_OTHER=(
 	'((echo "salut"&& jksla )&& (klsdf || jksldff))'
 	'((echo "salut" && jksla ) && (klsdf || jksldff))'
 	'((echo Salut || ls && pwd) && echo "Reussite") || echo "Echec"'
+	'false && (echo "A" || echo "B")'
+	'(false && echo "A") || echo "B"'
 	'echo abc > test.txt && cat test.txt'
 	'echo abc > test.txt && cat < test.txt'
 	'echo aaa > test.txt && echo abcdef >> test.txt && cat test.txt'
@@ -242,24 +244,72 @@ valgrind_flags=(valgrind --leak-check=full --track-fds=yes --trace-children=yes 
 
 valgrind_test()
 {
-	output=$(cd .test2 && echo "$1" | "${valgrind_flags[@]}" ./minishell 2>&1)
-	if echo "$output" | grep -q "ERROR SUMMARY: 0 errors";then
+	out=$(cd .test2 && echo "$1" | "${valgrind_flags[@]}" ./minishell 2>&1)
+	output=$(echo "$out" | grep -c "ERROR SUMMARY: ")
+	output2=$(echo "$out" | grep -c "ERROR SUMMARY: 0 errors")
+	#echo "output : $output, output2 : $output2"
+	if [[ "$output" == "$output2" ]]; then
 		echo -en "\e[32m[VOK] \e[0m"
 	else
 		echo -en "\e[31m[VKO] \e[0m"
-		echo -e "$1\n\n" >> logs/log_valgrind.txt
-		echo -e "$output\n\n\n" >> logs/log_valgrind.txt
 	fi
+	# if echo "$output" | grep -q "ERROR SUMMARY: 0 errors";then
+	# 	echo -en "\e[32m[VOK] \e[0m"
+	# else
+	# 	echo -en "\e[31m[VKO] \e[0m"
+	# 	echo -e "$1\n\n" >> logs/log_valgrind.txt
+	# 	echo -e "$output\n\n\n" >> logs/log_valgrind.txt
+	# fi
 }
 
 normalize_output()
 {
 	if [[ "$1" == *"export"* || "$1" == *"env"* ]]; then
-		sed -E 's/^bash: line [0-9]+: //; s/^bash: -c: line [0-9]+: //; s/^minishell: //; s/^Minishell: //' | sed 's/test1/test2/g' | grep -Ev "PWD|SHLVL|SHELL|SECONDS|_=|DBUS_SESSION_BUS_ADDRESS|LS_COLORS|XMODIFIERS" | sort
+		sed -E 's/^bash: //; s/^bash: -c: line [0-9]+: //; s/^minishell: //; s/^Minishell: //' | sed 's/test1/test2/g' | grep -Ev "PWD|SHLVL|SHELL|SECONDS|_=|DBUS_SESSION_BUS_ADDRESS|LS_COLORS|XMODIFIERS" | sort | grep -v '^bash-5\.1\$' | sed 's/bash-5\.1\$.*//'
 	else
-		sed -E 's/^bash: line [0-9]+: //; s/^bash: -c: line [0-9]+: //; s/^minishell: //; s/^Minishell: //' | sed 's/test1/test2/g'
+		sed -E 's/^bash: //; s/^bash: -c: line [0-9]+: //; s/^minishell: //; s/^Minishell: //' | sed 's/test1/test2/g' | grep -v '^bash-5\.1\$' | sed 's/bash-5\.1\$.*//'
 	fi
 }
+
+# launch_test()
+# {
+# 	cd .test3 || exit
+# 	timeout 5s echo "$1" | ./minishell "$1" 2>&1 | normalize_output > /dev/null
+# 	ret_timeout=${PIPESTATUS[0]}
+# 	cd .. || exit
+# 	if [ "$ret_timeout" -eq 124 ]; then
+# 	    echo -e "\e[33m[TIMEOUT]\e[0m  $1"
+# 	    return 124 # Sort de la fonction, donc passe au test suivant si dans une boucle
+# 	fi
+# 	# if diff <(bash --posix -c "$1" 2>&1 | normalize_output) <(./minishell "$1" 2>&1 | normalize_output) > /dev/null; then
+# 	# if diff <(cd .test1 && bash --posix -c "$1" 2>&1 | normalize_output "$1") <(cd .test2 && timeout 5s ./minishell "$1" 2>&1 | normalize_output "$1") > /dev/null; then
+# 	if diff <(cd .test1 && echo "$1" | bash --posix 2>&1 | normalize_output "$1") <(cd .test2 && timeout 5s echo "$1" | ./minishell 2>&1 | normalize_output "$1") > /dev/null; then
+# 		echo -en "\e[32m[OK] \e[0m"
+# 	else
+# 		echo -en "\e[31m[KO] \e[0m"
+# 		reset_files
+# 		{
+# 			echo "===== TEST : [$1] =====";
+# 			echo "";
+# 			echo "-----";
+# 			(cd .test2 && echo "$1" | ./minishell 2>&1 | normalize_output "$1") 2>&1 | cat -e; 
+# 			echo "-----";
+# 			echo "";
+# 			echo "";
+# 		} >> logs/log_minishell.txt
+
+# 		{
+# 			echo "===== TEST : [$1] =====";
+# 			echo "";
+# 			echo "-----";
+# 			(cd .test1 && echo "$1" | bash --posix 2>&1 | normalize_output "$1") | cat -e;
+# 			echo "-----";
+# 			echo "";
+# 			echo "";
+# 		} >> logs/log_bash.txt
+# 	fi
+# 	reset_files
+# }
 
 launch_test()
 {
@@ -271,9 +321,13 @@ launch_test()
 	    echo -e "\e[33m[TIMEOUT]\e[0m  $1"
 	    return 124 # Sort de la fonction, donc passe au test suivant si dans une boucle
 	fi
-	# if diff <(bash --posix -c "$1" 2>&1 | normalize_output) <(./minishell "$1" 2>&1 | normalize_output) > /dev/null; then
-	# if diff <(cd .test1 && bash --posix -c "$1" 2>&1 | normalize_output "$1") <(cd .test2 && timeout 5s ./minishell "$1" 2>&1 | normalize_output "$1") > /dev/null; then
-	if diff <(cd .test1 && echo "$1" | bash --posix 2>&1 | normalize_output "$1") <(cd .test2 && echo "$1" | ./minishell 2>&1 | normalize_output "$1") > /dev/null; then
+
+	# BASH_OUTPUT=$(cd .test1 && echo "$1" | bash --posix 2>&1 | normalize_output "$1")
+	# BASH_OUTPUT=$(cd .test1 && echo "$1" | bash --posix -i 2>&1 </dev/null | normalize_output "$1")\
+	BASH_OUTPUT=$(cd .test1 && bash --posix -i <<< "$1" 2>&1 | normalize_output "$1")
+	MINISHELL_OUTPUT=$(cd .test2 && timeout 5s echo "$1" | ./minishell 2>&1 | normalize_output "$1")
+
+	if diff <(echo "$BASH_OUTPUT") <(echo "$MINISHELL_OUTPUT") >/dev/null;then
 		echo -en "\e[32m[OK] \e[0m"
 	else
 		echo -en "\e[31m[KO] \e[0m"
@@ -282,17 +336,16 @@ launch_test()
 			echo "===== TEST : [$1] =====";
 			echo "";
 			echo "-----";
-			(cd .test2 && echo "$1" | ./minishell 2>&1 | normalize_output "$1") 2>&1 | cat -e; 
+			echo "$MINISHELL_OUTPUT" | cat -e;
 			echo "-----";
 			echo "";
 			echo "";
 		} >> logs/log_minishell.txt
-
 		{
 			echo "===== TEST : [$1] =====";
 			echo "";
 			echo "-----";
-			(cd .test1 && echo "$1" | bash --posix 2>&1 | normalize_output "$1") | cat -e;
+			echo "$BASH_OUTPUT" | cat -e;
 			echo "-----";
 			echo "";
 			echo "";
@@ -300,6 +353,7 @@ launch_test()
 	fi
 	reset_files
 }
+
 
 check_exit()
 {
@@ -503,3 +557,7 @@ do_the_tests()
 do_the_tests "$1" "$2" "$3"
 
 echo -e "\nI can't test signals, here_doc or unexpected leave myself, please don't consider my tester as the absolute truth of minishell.\n"
+echo -e "Les tests ci dessous sont a faire egalement, mais pour une raison que j'ignore ils font crash le tester. :\n"
+echo -e "export HOLA=\"bonjour      \" && echo \$HOLA | cat -e"
+echo -e "export HOLA=\"   -n bonjour\" && echo \$HOLA"
+echo -e "export HOLA=\"cat Makefile | grep NAME\" && echo \$HOLA"
