@@ -218,6 +218,7 @@ declare -a TESTS_OTHER=(
 	'ls'
 	'ls | sjdkof'
  	'ls | grep a | grep a'
+   	'ls | grep a | grep a | grep a'
 	'ls||pwd'
 	'ls | pwd'
 	'ls -kjasdf'
