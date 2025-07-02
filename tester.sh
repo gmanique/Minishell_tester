@@ -217,6 +217,7 @@ declare -a TESTS_WILDCARD=(
 declare -a TESTS_OTHER=(
 	'ls'
 	'ls | sjdkof'
+ 	'ls | grep a | grep a'
 	'ls||pwd'
 	'ls | pwd'
 	'ls -kjasdf'
