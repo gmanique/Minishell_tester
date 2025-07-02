@@ -459,7 +459,7 @@ do_join_tests()
 do_norminette()
 {
 	echo ""
-	if norminette ./**/./*.c | grep -i "error" > /dev/null || norminette -R Checkdefine ./**/./*.h | grep -i "error" > /dev/null ;
+	if norminette ../**/*.c | grep -i "error" > /dev/null || norminette -R Checkdefine ../**/*.h | grep -i "error" > /dev/null ;
 	then
 		echo -e "\t\t\e[31mNorminette [KO]\n\e[0m"
 	else
