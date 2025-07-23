@@ -473,7 +473,7 @@ test_make()
     MAKE_STATUS=$?
 
     if [[ $MAKE_STATUS -ne 0 ]] || echo "$MAKE_OUTPUT" | grep -qi "error"; then
-        echo "Makefile failed."
+        echo -e "\t\t\e[31mMakefile failed.\n\e[0m"
         return 1
     fi
 	return 0
@@ -485,7 +485,6 @@ setup_test_environment()
 	cd .. || exit
 	# make > /dev/null 2>&1 
 	if ! test_make; then
-		echo "Aborting."
 		exit 1
 	fi
 	do_norminette
